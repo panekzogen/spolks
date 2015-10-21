@@ -12,30 +12,51 @@ public class TCPServer {
     TCPServer(){
         try {
             socket = new ServerSocket(6789);
-            socket.setSoTimeout(30000);
+            socket.setSoTimeout(330000);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
     }
     int acceptConnection() {
         try {
             connectedSocket = socket.accept();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
             return -1;
         }
         System.out.println("Client connected: " + connectedSocket.getInetAddress().toString());
 
         rec = new Receiver(connectedSocket);
+        try {
+            if(Receiver.transLength == 0)
+                rec.outStream.writeChar('0');
+            else {
+                rec.outStream.writeChar(Receiver.operation);
+                rec.sendAnswer(Receiver.file);
+                if(Receiver.operation == 'd') {
+                    System.out.println("Restore download");
+                    rec.fDownload();
+                }
+                else {
+                    System.out.println("Restore upload");
+                    rec.fUpload();
+                }
+            }
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
+
         while(!connectedSocket.isClosed())
             if(rec.receive() == -1) closeConnection();
+
         return 1;
     }
     void closeConnection(){
+        Receiver.prevClient = connectedSocket.getInetAddress();
         try {
             connectedSocket.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
     }
 
