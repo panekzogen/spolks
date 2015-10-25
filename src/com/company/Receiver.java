@@ -11,10 +11,12 @@ public class Receiver {
 
     DataInputStream inStream;
     DataOutputStream outStream;
+    Socket client;
 
     String[] command;
 
     Receiver(Socket sock){
+        client = sock;
         try {
             inStream = new DataInputStream(sock.getInputStream());
             outStream = new DataOutputStream(sock.getOutputStream());
@@ -28,7 +30,7 @@ public class Receiver {
         try {
             command = readCommand().split(" ", 2);
         } catch (IOException e) {
-            System.out  .println(e.getMessage());
+            System.out.println(e.getMessage());
             return -1;
         }
         switch(command[0].toLowerCase()){
@@ -55,6 +57,11 @@ public class Receiver {
         return 0;
     }
     void fDownload(){
+        try {
+            client.setSoTimeout(30000);
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
         operation = 'd';
         file = "./" + file;
         File f = new File(file);
@@ -88,26 +95,40 @@ public class Receiver {
             }
             transLength = 0;
             rdFile.close();
+            if(inStream.readBoolean() == true)
+                operation = ' ';
         } catch (IOException e) {
             System.out.println(e.getMessage());
+        }
+        try {
+            client.setSoTimeout(120000);
+        } catch (SocketException e) {
+            e.printStackTrace();
         }
     }
     void fUpload(){
-        operation = 'u';
-        FileWriter out = null;
         try {
-            out = new FileWriter(file, true);
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
+            client.setSoTimeout(30000);
+        } catch (SocketException e) {
+            e.printStackTrace();
         }
-        BufferedWriter wrToFile = new BufferedWriter(out);
+        operation = 'u';
+        File f = new File(file);
+        BufferedWriter wrToFile = null;
+        try {
+            wrToFile = new BufferedWriter(new FileWriter(file));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
 
         try {
-            outStream.writeLong(transLength);
-            if(transLength == 0) transLength = inStream.readLong();
+            outStream.writeLong(f.length());
+            transLength = inStream.readLong();
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
+        if(transLength == 0) return;
 
         byte[] buf = new byte[1024];
         while(transLength > 1024){
@@ -122,10 +143,16 @@ public class Receiver {
         try {
             inStream.read(buf, 0, (int)transLength);
             wrToFile.append(new String(buf), 0, (int)transLength);
+            transLength = 0;
             wrToFile.close();
-            out.close();
+            outStream.writeBoolean(true);
         } catch (IOException e) {
             System.out.println(e.getMessage());
+        }
+        try {
+            client.setSoTimeout(120000);
+        } catch (SocketException e) {
+            e.printStackTrace();
         }
     }
     String readCommand() throws IOException {

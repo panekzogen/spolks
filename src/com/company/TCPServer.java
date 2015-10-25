@@ -12,7 +12,7 @@ public class TCPServer {
     TCPServer(){
         try {
             socket = new ServerSocket(6789);
-            socket.setSoTimeout(330000);
+            socket.setSoTimeout(120000);
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
@@ -28,7 +28,7 @@ public class TCPServer {
 
         rec = new Receiver(connectedSocket);
         try {
-            if(Receiver.transLength == 0)
+            if(Receiver.operation == ' ')
                 rec.outStream.writeChar('0');
             else {
                 rec.outStream.writeChar(Receiver.operation);
