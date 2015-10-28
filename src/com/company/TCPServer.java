@@ -12,14 +12,17 @@ public class TCPServer {
     TCPServer(){
         try {
             socket = new ServerSocket(6789);
-            socket.setSoTimeout(120000);
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
     }
     int acceptConnection() {
         try {
+            System.out.println("Waiting for connection . . .");
             connectedSocket = socket.accept();
+            connectedSocket.setSoTimeout(120000);
+            connectedSocket.setReceiveBufferSize(4096);
+            connectedSocket.setSendBufferSize(4096);
         } catch (IOException e) {
             System.out.println(e.getMessage());
             return -1;
@@ -47,13 +50,14 @@ public class TCPServer {
         }
 
         while(!connectedSocket.isClosed())
-            if(rec.receive() == -1) closeConnection();
+            if(rec.receive() == 0) closeConnection();
 
         return 1;
     }
     void closeConnection(){
         Receiver.prevClient = connectedSocket.getInetAddress();
         try {
+            System.out.println("Socket closed");
             connectedSocket.close();
         } catch (IOException e) {
             System.out.println(e.getMessage());

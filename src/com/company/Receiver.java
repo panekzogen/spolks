@@ -31,7 +31,7 @@ public class Receiver {
             command = readCommand().split(" ", 2);
         } catch (IOException e) {
             System.out.println(e.getMessage());
-            return -1;
+            return 0;
         }
         switch(command[0].toLowerCase()){
             case "echo":
@@ -43,7 +43,14 @@ public class Receiver {
             case "download":
                 System.out.println("File download start");
                 file = command[1];
-                fDownload();
+                try {
+                    fDownload();
+                } catch (SocketTimeoutException ste) {
+                    ste.printStackTrace();
+                    return -1;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 break;
             case "upload":
                 System.out.println("File upload start");
@@ -51,55 +58,38 @@ public class Receiver {
                 fUpload();
                 break;
             case "exit":case "quit":case "close":
-                return -1;
+                return 0;
             default: sendAnswer("Command not found");
         }
-        return 0;
+        return 1;
     }
-    void fDownload(){
+    void fDownload() throws IOException{
         try {
             client.setSoTimeout(30000);
         } catch (SocketException e) {
             e.printStackTrace();
         }
+
         operation = 'd';
         file = "./" + file;
         File f = new File(file);
-        DataInputStream rdFile = null;
-        try {
-            rdFile = new DataInputStream(new DataInputStream(new FileInputStream(f)));
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        }
+        DataInputStream rdFile = new DataInputStream(new FileInputStream(f));
 
-        if(transLength <= 0)
-            transLength = f.length();
-        else try {
-            rdFile.skip(transLength);
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        }
-        try {
-            outStream.flush();
-            outStream.writeLong(transLength);
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        }
+        outStream.flush();
+        outStream.writeLong(f.length());
 
+        int packLength = 0;
         byte[] buf = new byte[1024];
-        try {
-            while(rdFile.read(buf, 0, 1024) != -1){
-                if(transLength >= 1024) outStream.write(buf, 0, 1024);
-                else outStream.write(buf, 0, (int)transLength);
-                transLength -= 1024;
-            }
-            transLength = 0;
-            rdFile.close();
-            if(inStream.readBoolean() == true)
-                operation = ' ';
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
+        while(true){
+            packLength = rdFile.read(buf, 0, 1024);
+            if( packLength == -1 ) break;
+            outStream.write(buf, 0, packLength);
         }
+        rdFile.close();
+
+        if(inStream.readBoolean() == true)
+            operation = ' ';
+
         try {
             client.setSoTimeout(120000);
         } catch (SocketException e) {
