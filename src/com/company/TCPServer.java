@@ -38,6 +38,7 @@ public class TCPServer {
                 rec.sendAnswer(Receiver.file);
                 if(Receiver.operation == 'd') {
                     System.out.println("Restore download");
+                    rec.receivedPackages = rec.inStream.readInt();
                     rec.fDownload();
                 }
                 else {

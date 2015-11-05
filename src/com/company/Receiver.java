@@ -5,7 +5,7 @@ import java.net.*;
 
 public class Receiver {
     static InetAddress prevClient = null;
-    static long transLength = 0;
+    static int receivedPackages = 0;
     static char operation = ' ';
     static String file = "";
 
@@ -23,8 +23,11 @@ public class Receiver {
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
-        if(!sock.getInetAddress().equals(prevClient))
-            transLength = 0;
+        if(!sock.getInetAddress().equals(prevClient)){
+            receivedPackages = 0;
+            operation = ' ';
+            file = "";
+        }
     }
     int receive(){
         try {
@@ -75,20 +78,28 @@ public class Receiver {
         File f = new File(file);
         DataInputStream rdFile = new DataInputStream(new FileInputStream(f));
 
-        outStream.flush();
-        outStream.writeLong(f.length());
+        int pts = (int)f.length()/1024 + 1 - receivedPackages;
 
-        int packLength = 0;
+        outStream.flush();
+        outStream.writeInt(pts);
+
+        System.out.print("Sended packages:\n0 of " + pts);
+
         byte[] buf = new byte[1024];
-        while(true){
-            packLength = rdFile.read(buf, 0, 1024);
-            if( packLength == -1 ) break;
-            outStream.write(buf, 0, packLength);
+        for(int i = pts; i > 1; i--){
+            rdFile.read(buf, 0, 1024);
+            outStream.write(buf, 0, 1024);
+            if(i % (pts/100) == 0)
+                System.out.print("\r" + (pts - i) + " of " + pts + " [" + (((pts - i)* 100)/pts) + "%]");
         }
-        rdFile.close();
 
         if(inStream.readBoolean() == true)
             operation = ' ';
+        outStream.writeInt((int)(f.length() - (f.length()/1024)*1024));
+        rdFile.read(buf, 0, (int)(f.length() - (f.length()/1024)*1024));
+        outStream.write(buf, 0, (int)(f.length() - (f.length()/1024)*1024));
+        System.out.println("\r" + pts + " of " + pts + " [100%]");
+        rdFile.close();
 
         try {
             client.setSoTimeout(120000);
@@ -103,7 +114,7 @@ public class Receiver {
             e.printStackTrace();
         }
         operation = 'u';
-        File f = new File(file);
+        /*File f = new File(file);
         BufferedWriter wrToFile = null;
         try {
             wrToFile = new BufferedWriter(new FileWriter(file));
@@ -138,7 +149,7 @@ public class Receiver {
             outStream.writeBoolean(true);
         } catch (IOException e) {
             System.out.println(e.getMessage());
-        }
+        }*/
         try {
             client.setSoTimeout(120000);
         } catch (SocketException e) {
