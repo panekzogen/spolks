@@ -2,6 +2,9 @@ package com.company;
 
 import java.io.*;
 import java.net.*;
+import java.nio.channels.*;
+import java.util.Iterator;
+import java.util.Set;
 
 public class Receiver {
     static InetAddress prevClient = null;
@@ -28,6 +31,7 @@ public class Receiver {
             operation = ' ';
             file = "";
         }
+        prevClient = sock.getInetAddress();
     }
     int receive(){
         try {
@@ -47,7 +51,8 @@ public class Receiver {
                 System.out.println("File download start");
                 file = command[1];
                 try {
-                    fDownload();
+                    //fDownload();
+                    fDownloadChannel();
                 } catch (SocketTimeoutException ste) {
                     ste.printStackTrace();
                     return -1;
@@ -65,6 +70,36 @@ public class Receiver {
             default: sendAnswer("Command not found");
         }
         return 1;
+    }
+    void fDownloadChannel() throws IOException{
+        operation = 'd';
+        file = "./" + file;
+        File f = new File(file);
+        SocketChannel channel = client.getChannel();
+
+        Selector selector = Selector.open();
+        channel.configureBlocking(false);
+        channel.register(selector, SelectionKey.OP_ACCEPT);
+        channel.register(selector, SelectionKey.OP_WRITE);
+
+        while(true) {
+
+            int readyChannels = selector.select(10000);
+            if(readyChannels == 0) continue;
+
+            Set<SelectionKey> selectedKeys = selector.selectedKeys();
+            Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
+            while(keyIterator.hasNext()) {
+                SelectionKey key = keyIterator.next();
+                if(key.isAcceptable()) {
+                    // a connection was accepted by a ServerSocketChannel.
+
+                } else if (key.isWritable()) {
+                    // a channel is ready for writing
+                }
+                keyIterator.remove();
+            }
+        }
     }
     void fDownload() throws IOException{
         try {

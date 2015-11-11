@@ -5,7 +5,7 @@ public class Main {
     public static void main(String[] args) {
         TCPServer server = new TCPServer();
 
-        while (server.acceptConnection() == 1) { }
+        while (server.run() == 1) { }
 
 
     }
