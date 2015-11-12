@@ -20,11 +20,11 @@ public class TCPServer {
     DataInputStream inStream;
     DataOutputStream outStream;
 
-    TCPServer(){
+    TCPServer(int port){
         try {
             ServerSocketChannel server = ServerSocketChannel.open();
             socket = server.socket();
-            server.bind(new InetSocketAddress(6789));
+            server.bind(new InetSocketAddress(port));
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
@@ -85,7 +85,7 @@ public class TCPServer {
         if( receive() == 0 ) closeConnection();
         return 1;
     }
-    int receive(){
+    int receive(){                          //TODO: serialize
         String[] command;
         while(!connectedSocket.isClosed()){
             try {
@@ -104,12 +104,12 @@ public class TCPServer {
                 case "download":
                     System.out.println("File download start");
                     file = command[1];
-                    fDownloadChannel();
+                    if(fDownloadChannel() == -1) return 0;
                     break;
                 case "upload":
                     System.out.println("File upload start");
                     file = command[1];
-                    fUploadChannel();
+                    if(fUploadChannel() == -1) return 0;
                     break;
                 case "exit":case "quit":case "close":
                     return 0;
@@ -118,25 +118,30 @@ public class TCPServer {
         }
         return 1;
     }
-    void fDownloadChannel(){
+    int fDownloadChannel(){
         operation = 'd';
-        file = "./" + file;
-        File f = new File(file);
+        File f = new File("./"  + file);
         int pts = (int)f.length()/1024 + 1 - receivedPackages;
 
         DataInputStream rdFile = null;
         try {
             rdFile = new DataInputStream(new FileInputStream(f));
         } catch (FileNotFoundException e) {
-            System.out.println("File not found");
-            return;
+            System.out.println(e.getMessage());
+            try {
+                operation = ' ';
+                outStream.writeInt(0);
+            } catch (IOException e1) {
+                System.out.println(e.getMessage());
+            }
+            return 0;
         }
         try {
             rdFile.skip(receivedPackages*1024);
             outStream.flush();
             outStream.writeInt(pts);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         System.out.print("Sended packages:\n0 of " + pts);
 
@@ -147,13 +152,13 @@ public class TCPServer {
             selector = Selector.open();
             channel.configureBlocking(false);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         SelectionKey selk = null;
         try {
             selk = channel.register(selector, SelectionKey.OP_WRITE);
         } catch (ClosedChannelException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
 
         byte[] buf = new byte[1024];
@@ -163,9 +168,19 @@ public class TCPServer {
             try {
                 readyChannels = selector.select(20000);
             } catch (IOException e) {
-                e.printStackTrace();
+                System.out.println(e.getMessage());
             }
-            if(readyChannels == 0) break;
+            if(readyChannels == 0) {
+                System.out.println("Write timeout reached");
+                selk.cancel();
+                try {
+                    channel.configureBlocking(true);
+                    rdFile.close();
+                } catch (IOException e1) {
+                    System.out.println(e1.getMessage());
+                }
+                return -1;
+            }
 
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
@@ -178,16 +193,16 @@ public class TCPServer {
                         ByteBuffer bb = ByteBuffer.wrap(buf, 0, length);
                         if (channel.write(bb) != 0) packn++;
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        System.out.println(e.getMessage());
 
                         selk.cancel();
                         try {
                             channel.configureBlocking(true);
                             rdFile.close();
                         } catch (IOException e1) {
-                            e1.printStackTrace();
+                            System.out.println(e1.getMessage());
                         }
-                        return;
+                        return -1;
                     }
                     if(pts > 100) if (packn % (pts/100) == 0)
                         System.out.print("\r" + packn + " of " + pts + " [" + ((packn*100/pts)) + "%]");
@@ -200,15 +215,16 @@ public class TCPServer {
         receivedPackages = 0;
         operation = ' ';
         System.out.println("\r" + pts + " of " + pts + " [100%]");
+
         try {
             rdFile.close();
 
             selk.cancel();
             channel.configureBlocking(true);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
-
+        return 1;
     }
     void fDownload() throws IOException{
         try {
@@ -251,14 +267,14 @@ public class TCPServer {
             e.printStackTrace();
         }
     }
-    void fUploadChannel(){
+    int fUploadChannel(){
         operation = 'u';
         System.out.println("Download file " + file);
         FileWriter out = null;
         try {
             out = new FileWriter("./" + file + ".indownload", true);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         BufferedWriter wrToFile = new BufferedWriter(out);
 
@@ -266,7 +282,11 @@ public class TCPServer {
         try {
             packagesToReceive = inStream.readInt();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
+        }
+        if(packagesToReceive == 0) {
+            operation = 'u';
+            return 0;
         }
         System.out.print("Received packages:\n0 of " + packagesToReceive);
 
@@ -276,7 +296,7 @@ public class TCPServer {
             selector = Selector.open();
             channel.configureBlocking(false);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         SelectionKey selk = null;
         try {
@@ -292,9 +312,19 @@ public class TCPServer {
             try {
                 readyChannels = selector.select(20000);
             } catch (IOException e) {
-                e.printStackTrace();
+                System.out.println(e.getMessage());
             }
-            if(readyChannels == 0) break;
+            if(readyChannels == 0) {
+                System.out.println("Read timeout reached");
+                selk.cancel();
+                try {
+                    channel.configureBlocking(true);
+                    wrToFile.close();
+                } catch (IOException e1) {
+                    System.out.println(e1.getMessage());
+                }
+                return -1;
+            }
 
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
@@ -305,22 +335,22 @@ public class TCPServer {
                     try {
                         length = channel.read(buf);
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        System.out.println(e.getMessage());
                         selk.cancel();
                         try {
                             channel.configureBlocking(true);
                             wrToFile.close();
                         } catch (IOException e1) {
-                            e1.printStackTrace();
+                            System.out.println(e1.getMessage());
                         }
-                        return;
+                        return -1;
                     }
                     if(length != 0) {
                         packn++;
                         try {
                             wrToFile.append(new String(buf.array()), 0, length);
                         } catch (IOException e) {
-                            e.printStackTrace();
+                            System.out.println(e.getMessage());
                         }
                         if(packagesToReceive > 100) if(packn % (packagesToReceive/100) == 0)
                             System.out.print("\r" + packn + " of " + packagesToReceive + " [" + ((packn* 100)/packagesToReceive) + "%]");
@@ -337,7 +367,7 @@ public class TCPServer {
         try {
             wrToFile.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
 
         File f = new File(file + ".indownload");
@@ -347,8 +377,9 @@ public class TCPServer {
         try {
             channel.configureBlocking(true);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
+        return 1;
     }
     String readCommand() throws IOException {
         String s = null;
