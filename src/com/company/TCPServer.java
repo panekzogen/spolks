@@ -121,7 +121,8 @@ public class TCPServer {
     int fDownloadChannel(){
         operation = 'd';
         File f = new File("./"  + file);
-        int pts = (int)f.length()/1024 + 1 - receivedPackages;
+        int pts = (int)f.length()/1024 - receivedPackages;
+        if(f.length() % 1024 != 0) pts++;
 
         DataInputStream rdFile = null;
         try {
@@ -163,6 +164,7 @@ public class TCPServer {
 
         byte[] buf = new byte[1024];
         int packn = 0;
+        int length = 0;
         ByteBuffer bb = ByteBuffer.allocate(1);
         bb.position(1);
         while(packn < pts) {
@@ -173,7 +175,7 @@ public class TCPServer {
                 System.out.println(e.getMessage());
             }
             if(readyChannels == 0) {
-                System.out.println("Write timeout reached");
+                System.out.println("\nWrite timeout reached");
                 selk.cancel();
                 try {
                     channel.configureBlocking(true);
@@ -189,15 +191,14 @@ public class TCPServer {
             while(keyIterator.hasNext()) {
                 SelectionKey key = keyIterator.next();
                 if (key.isWritable()) {
-                    int length = 0;
                     try {
                         if(!bb.hasRemaining()){
                             length = rdFile.read(buf, 0, 1024);
                             bb = ByteBuffer.wrap(buf, 0, length);
                             packn++;
-                            if(length != 1024)
-                                channel.write(bb);
                         }
+                        if(packn == pts)
+                            while(bb.hasRemaining()) channel.write(bb);
                         else channel.write(bb);
                     } catch (IOException e) {
                         System.out.println(e.getMessage());
