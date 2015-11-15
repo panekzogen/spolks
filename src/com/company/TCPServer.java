@@ -163,6 +163,8 @@ public class TCPServer {
 
         byte[] buf = new byte[1024];
         int packn = 0;
+        ByteBuffer bb = ByteBuffer.allocate(1);
+        bb.position(1);
         while(packn < pts) {
             int readyChannels = 0;
             try {
@@ -189,9 +191,14 @@ public class TCPServer {
                 if (key.isWritable()) {
                     int length = 0;
                     try {
-                        length = rdFile.read(buf, 0, 1024);
-                        ByteBuffer bb = ByteBuffer.wrap(buf, 0, length);
-                        if (channel.write(bb) != 0) packn++;
+                        if(!bb.hasRemaining()){
+                            length = rdFile.read(buf, 0, 1024);
+                            bb = ByteBuffer.wrap(buf, 0, length);
+                            packn++;
+                            if(length != 1024)
+                                channel.write(bb);
+                        }
+                        else channel.write(bb);
                     } catch (IOException e) {
                         System.out.println(e.getMessage());
 
