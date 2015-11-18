@@ -85,41 +85,39 @@ public class TCPServer {
         if( receive() == 0 ) closeConnection();
         return 1;
     }
-    int receive(){                          //TODO: serialize
-        String[] command;
+    int receive(){
         while(!connectedSocket.isClosed()){
             try {
-                command = readCommand().split(" ", 2);
+                switch(inStream.readInt()){
+                    case 1:                       //echo
+                        sendAnswer(readArgs());
+                        break;
+                    case 2:                       //time
+                        sendAnswer(java.util.Calendar.getInstance().getTime().toString());
+                        break;
+                    case 3:                       //download
+                        file = readArgs();
+                        if(fDownloadChannel() == -1) return 0;
+                        break;
+                    case 4:                       //upload
+                        file = readArgs();
+                        if(fUploadChannel() == -1) return 0;
+                        break;
+                    case 5:
+                        return 0;
+                    default: sendAnswer("Command not found");
+                }
             } catch (IOException e) {
                 System.out.println(e.getMessage());
                 return 0;
-            }
-            switch(command[0].toLowerCase()){
-                case "echo":
-                    sendAnswer(command[1]);
-                    break;
-                case "time":
-                    sendAnswer(java.util.Calendar.getInstance().getTime().toString());
-                    break;
-                case "download":
-                    System.out.println("File download start");
-                    file = command[1];
-                    if(fDownloadChannel() == -1) return 0;
-                    break;
-                case "upload":
-                    System.out.println("File upload start");
-                    file = command[1];
-                    if(fUploadChannel() == -1) return 0;
-                    break;
-                case "exit":case "quit":case "close":
-                    return 0;
-                default: sendAnswer("Command not found");
             }
         }
         return 1;
     }
     int fDownloadChannel(){
         operation = 'd';
+        System.out.println("Download file " + file + " begins");
+
         File f = new File("./"  + file);
         int pts = (int)f.length()/1024 - receivedPackages;
         if(f.length() % 1024 != 0) pts++;
@@ -277,7 +275,8 @@ public class TCPServer {
     }
     int fUploadChannel(){
         operation = 'u';
-        System.out.println("Download file " + file);
+        System.out.println("Upload file " + file + " begins");
+
         FileWriter out = null;
         try {
             out = new FileWriter("./" + file + ".indownload", true);
@@ -292,10 +291,7 @@ public class TCPServer {
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
-        if(packagesToReceive == 0) {
-            operation = 'u';
-            return 0;
-        }
+        if(packagesToReceive == 0) return 1;
         System.out.print("Received packages:\n0 of " + packagesToReceive);
 
         SocketChannel channel = connectedSocket.getChannel();
@@ -353,10 +349,21 @@ public class TCPServer {
                         }
                         return -1;
                     }
-                    if(length != 0) {
+                    if(packn == packagesToReceive - 1){
+                        if(length == 0) packn++;
+                        else{
+                            try {
+                                wrToFile.append(new String(buf.array()), 0, length);
+                            } catch (IOException e) {
+                                System.out.println(e.getMessage());
+                            }
+                            packn++;
+                        }
+                    }
+                    else if(!buf.hasRemaining()) {
                         packn++;
                         try {
-                            wrToFile.append(new String(buf.array()), 0, length);
+                            wrToFile.append(new String(buf.array()), 0, 1024);
                         } catch (IOException e) {
                             System.out.println(e.getMessage());
                         }
@@ -389,15 +396,18 @@ public class TCPServer {
         }
         return 1;
     }
-    String readCommand() throws IOException {
-        String s = null;
-        s = inStream.readUTF();
+    String readArgs() throws IOException {
+        String s = "";
+        do{
+            s += inStream.readUTF();
+        }while(s.charAt(s.length() - 1) != '\0');
+        s = s.substring(0, s.length() - 1);
         return s;
     }
 
     void sendAnswer(String s){
         try {
-            outStream.writeUTF(s);
+            outStream.writeUTF(s + '\0');
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
@@ -410,5 +420,4 @@ public class TCPServer {
             System.out.println(e.getMessage());
         }
     }
-
 }
