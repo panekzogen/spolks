@@ -24,6 +24,7 @@ public class TCPServer {
         try {
             ServerSocketChannel server = ServerSocketChannel.open();
             socket = server.socket();
+
             server.bind(new InetSocketAddress(port));
         } catch (IOException e) {
             System.out.println(e.getMessage());
@@ -59,7 +60,7 @@ public class TCPServer {
                 outStream.writeChar('0');
             else {
                 outStream.writeChar(operation);
-                sendAnswer(file);
+                outStream.writeUTF(file);
                 if(operation == 'd') {
                     System.out.println("Restore download");
                     receivedPackages = inStream.readInt();
