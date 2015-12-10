@@ -24,6 +24,7 @@ public class TCPServer {
         try {
             ServerSocketChannel server = ServerSocketChannel.open();
             socket = server.socket();
+            
             server.bind(new InetSocketAddress(port));
         } catch (IOException e) {
             System.out.println(e.getMessage());
@@ -34,6 +35,7 @@ public class TCPServer {
             System.out.println("Waiting for connection . . .");
             connectedSocket = socket.accept();
             connectedSocket.setSoTimeout(120000);
+            connectedSocket.setOOBInline(true);
             //connectedSocket.setReceiveBufferSize(4096);
             //connectedSocket.setSendBufferSize(4096);
         } catch (IOException e) {
@@ -144,7 +146,6 @@ public class TCPServer {
         }
         System.out.print("Sended packages:\n0 of " + pts);
 
-
         SocketChannel channel = connectedSocket.getChannel();
         Selector selector = null;
         try {
@@ -166,6 +167,28 @@ public class TCPServer {
         ByteBuffer bb = ByteBuffer.allocate(1);
         bb.position(1);
         while(packn < pts) {
+            if(pts > 100) if (packn % (pts / 100) == 0) {
+                selk.cancel();
+                try {
+                    channel.configureBlocking(true);
+                    connectedSocket.sendUrgentData(5);
+                    channel.configureBlocking(false);
+                } catch (IOException e) {
+                    System.out.println(e.getMessage());
+                }
+                try {
+                    selector = Selector.open();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    selk = channel.register(selector, SelectionKey.OP_WRITE);
+                } catch (ClosedChannelException e) {
+                    e.printStackTrace();
+                }
+                System.out.print("\r" + packn + " of " + pts + " [" + ((packn*100/pts)) + "%]");
+            }
+
             int readyChannels = 0;
             try {
                 readyChannels = selector.select(20000);
@@ -183,6 +206,8 @@ public class TCPServer {
                 }
                 return -1;
             }
+
+
 
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
@@ -210,8 +235,6 @@ public class TCPServer {
                         }
                         return -1;
                     }
-                    if(pts > 100) if (packn % (pts/100) == 0)
-                        System.out.print("\r" + packn + " of " + pts + " [" + ((packn*100/pts)) + "%]");
 
                 }
                 keyIterator.remove();
