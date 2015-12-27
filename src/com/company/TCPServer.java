@@ -2,6 +2,7 @@ package com.company;
 
 import java.io.*;
 import java.net.*;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.Iterator;
@@ -34,9 +35,6 @@ public class TCPServer {
             System.out.println("Waiting for connection . . .");
             connectedSocket = socket.accept();
             connectedSocket.setSoTimeout(120000);
-            connectedSocket.setOOBInline(true);
-            //connectedSocket.setReceiveBufferSize(4096);
-            //connectedSocket.setSendBufferSize(4096);
         } catch (IOException e) {
             System.out.println(e.getMessage());
             return -1;
@@ -166,27 +164,6 @@ public class TCPServer {
         ByteBuffer bb = ByteBuffer.allocate(1);
         bb.position(1);
         while(packn < pts) {
-            if(pts > 100) if (packn % (pts / 100) == 0) {
-                selk.cancel();
-                try {
-                    channel.configureBlocking(true);
-                    connectedSocket.sendUrgentData(5);
-                    channel.configureBlocking(false);
-                } catch (IOException e) {
-                    System.out.println(e.getMessage());
-                }
-                try {
-                    selector = Selector.open();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                try {
-                    selk = channel.register(selector, SelectionKey.OP_WRITE);
-                } catch (ClosedChannelException e) {
-                    e.printStackTrace();
-                }
-                System.out.print("\r" + packn + " of " + pts + " [" + ((packn*100/pts)) + "%]");
-            }
 
             int readyChannels = 0;
             try {
@@ -205,8 +182,6 @@ public class TCPServer {
                 }
                 return -1;
             }
-
-
 
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
@@ -234,7 +209,8 @@ public class TCPServer {
                         }
                         return -1;
                     }
-
+                    if(pts > 100) if (packn % (pts / (100)) == 0)
+                        System.out.print("\r" + packn + " of " + pts + " [" + ((packn*100/pts)) + "%]");
                 }
                 keyIterator.remove();
             }
@@ -253,47 +229,6 @@ public class TCPServer {
             System.out.println(e.getMessage());
         }
         return 1;
-    }
-    void fDownload() throws IOException{
-        try {
-            connectedSocket.setSoTimeout(30000);
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
-
-        operation = 'd';
-        file = "./" + file;
-        File f = new File(file);
-        DataInputStream rdFile = new DataInputStream(new FileInputStream(f));
-
-        int pts = (int)f.length()/1024 + 1 - receivedPackages;
-        rdFile.skip(receivedPackages*1024);
-        outStream.flush();
-        outStream.writeInt(pts);
-
-        System.out.print("Sended packages:\n0 of " + pts);
-
-        byte[] buf = new byte[1024];
-        for(int i = pts; i > 1; i--){
-            rdFile.read(buf, 0, 1024);
-            outStream.write(buf, 0, 1024);
-            if(i % (pts/100) == 0)
-                System.out.print("\r" + (pts - i) + " of " + pts + " [" + (((pts - i)* 100)/pts) + "%]");
-        }
-
-        if(inStream.readBoolean() == true)
-            operation = ' ';
-        outStream.writeInt((int)(f.length() - (f.length()/1024)*1024));
-        rdFile.read(buf, 0, (int)(f.length() - (f.length()/1024)*1024));
-        outStream.write(buf, 0, (int)(f.length() - (f.length()/1024)*1024));
-        System.out.println("\r" + pts + " of " + pts + " [100%]");
-        rdFile.close();
-
-        try {
-            connectedSocket.setSoTimeout(120000);
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
     }
     int fUploadChannel(){
         operation = 'u';
